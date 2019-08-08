@@ -1,5 +1,6 @@
 #include "player.h"
 #include <SDL2/SDL.h>
+#include <time.h>
 
 static SDL_Texture* playerSprite;
 static SDL_Rect* playerBox;
@@ -9,14 +10,17 @@ static const Uint8 *keyboard_state;
 
 // struct for the bullet
 typedef struct{
-    float speed;
     SDL_Rect bulletSprites[2];
     struct BulletNode *nextBullet; // will be used to create linked list of bullets
 } BulletNode;
 
+// bullet related
 BulletNode *bullets;
-
+int shootingDelay;
+int startShootTime;
 void player_shoot(void);
+bool canShoot(void);
+//
 
 void init_player(GameProperties *gameProperties){
     player.isDead = false;
@@ -34,11 +38,11 @@ void init_player(GameProperties *gameProperties){
     // used to detect if a key has been pressed or not
     keyboard_state = SDL_GetKeyboardState(NULL);
     
+    shootingDelay = 300;
 }
 
 // updates and renders anything related to the player
 void render_player(SDL_Renderer *renderer){
-    
     if(up && player.y > 0) { player.y -= PLAYER_SPEED; }
     if(down && player.y < SCREEN_HEIGHT - PLAYER_HEIGHT) { player.y += PLAYER_SPEED; }
     if(left && player.x > 0) { player.x -= PLAYER_SPEED; }
@@ -64,8 +68,8 @@ void player_check_inputs(SDL_Event *e){
     
     if(e->type == SDL_KEYDOWN || e->type == SDL_KEYUP){
         
-        if(keyboard_state[SDL_SCANCODE_SPACE])
-            player_shoot();
+        if(keyboard_state[SDL_SCANCODE_SPACE] && canShoot())
+            player_shoot(); 
         
         if(keyboard_state[SDL_SCANCODE_UP] && !keyboard_state[SDL_SCANCODE_DOWN]){
             up = true;
@@ -86,10 +90,11 @@ void player_check_inputs(SDL_Event *e){
 }
 
 void player_shoot(){
+    startShootTime = SDL_GetTicks();
     // creates a node that will contain the new bullet
     BulletNode *new_bullet = malloc(sizeof(BulletNode));
     if(!new_bullet) { printf("fatal error: [pbullets] memory not allocated\n");}
-    
+
     // creates the sprites (basically rectangles) that will be the bullets
     for(int i = 0; i < 2; i++){
         new_bullet->bulletSprites[i].w = BULLET_WIDTH;
@@ -114,4 +119,11 @@ void player_shoot(){
 
 void free_player(){
     free(playerBox);
+}
+
+bool canShoot(){
+    if(SDL_GetTicks() - startShootTime > shootingDelay)
+        return true;
+    
+    return false;
 }
