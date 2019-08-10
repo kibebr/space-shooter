@@ -1,20 +1,33 @@
 #include "player.h"
 #include <SDL2/SDL.h>
-#include <time.h>
+#include <math.h>
 
-static SDL_Texture* playerSprite;
-static SDL_Rect* playerBox;
-static Player player;
-static bool up, down, left, right;
-static const Uint8 *keyboard_state;
-
-// struct for the bullet
+// player related
 typedef struct{
-    SDL_Rect bulletSprites[2];
-    struct BulletNode *nextBullet; // will be used to create linked list of bullets
-} BulletNode;
+
+    // movement related
+    float x, y;
+    bool isTurningLeft, isTurningRight;
+    bool isMovingTowards, isMovingBackwards;
+    double degrees;
+    double acceleration;
+    //
+
+    SDL_Texture* sprite;
+    SDL_Rect* box;
+
+    const Uint8 *keyboard_state;
+    bool isDead;
+
+} Player;
 
 // bullet related
+typedef struct{
+    float floatX, floatY;
+    SDL_Rect bulletSprites[2];
+    struct BulletNode *nextBullet; // will be used to create a linked list of bullets
+} BulletNode;
+
 BulletNode *bullets;
 int shootingDelay;
 int startShootTime;
@@ -22,45 +35,88 @@ void player_shoot(void);
 bool canShoot(void);
 //
 
+// converts the player's angles to radians
+double deg2rad(double degrees);
+
+static Player player;
+
+
 void init_player(GameProperties *gameProperties){
-    player.isDead = false;
-    playerSprite = LoadTexture("/home/kibe/Desktop/space_test/assets/ship.png\0");
+
+    player.sprite = LoadTexture("/home/kibe/Documents/space-shooter/assets/ship.png\0");
     
     // sets player's initial position to the center of the screen
     player.x = (SCREEN_WIDTH - PLAYER_WIDTH) / 2;
     player.y = (SCREEN_HEIGHT - PLAYER_HEIGHT) / 2;
-    
+
     // allocates enough memory for a SDL_Rect of the player
-    playerBox = malloc(sizeof(SDL_Rect));
-    playerBox->w = PLAYER_WIDTH;
-    playerBox->h = PLAYER_HEIGHT;
+    player.box = malloc(sizeof(SDL_Rect));
+    player.box->w = PLAYER_WIDTH;
+    player.box->h = PLAYER_HEIGHT;
     
     // used to detect if a key has been pressed or not
-    keyboard_state = SDL_GetKeyboardState(NULL);
+    player.keyboard_state = SDL_GetKeyboardState(NULL);
     
     shootingDelay = 300;
+
+    player.acceleration = 0;
 }
 
 // updates and renders anything related to the player
 void render_player(SDL_Renderer *renderer){
-    if(up && player.y > 0) { player.y -= PLAYER_SPEED; }
-    if(down && player.y < SCREEN_HEIGHT - PLAYER_HEIGHT) { player.y += PLAYER_SPEED; }
-    if(left && player.x > 0) { player.x -= PLAYER_SPEED; }
-    if(right && player.x < SCREEN_WIDTH - PLAYER_WIDTH) { player.x += PLAYER_SPEED; } 
+
+    // related to player's movement
+    if(player.isTurningLeft) player.degrees -= PLAYER_TURNING_SPEED;
+    if(player.isTurningRight) player.degrees += PLAYER_TURNING_SPEED;
+
+    player.box->x = player.x;
+    player.box->y = player.y;
     
-    playerBox->x = player.x;
-    playerBox->y = player.y;
+    player.x += sin(deg2rad(player.degrees)) * player.acceleration;
+    player.y -= cos(deg2rad(player.degrees)) * player.acceleration;
     
-    SDL_RenderCopy(renderer, playerSprite, NULL, playerBox);
-    
+    if(player.isMovingTowards && !player.isMovingBackwards)
+    {
+        if(player.acceleration < PLAYER_SPEED_LIMIT)
+        {
+            if(player.acceleration < 0)
+                player.acceleration += 0.100;
+            else
+                player.acceleration += 0.050;
+        }
+    }
+    else if(player.isMovingBackwards && !player.isMovingTowards)
+    {
+        if(player.acceleration > -PLAYER_SPEED_LIMIT)
+        {
+            if(player.acceleration > 0)
+                player.acceleration -= 0.100;
+            else
+                player.acceleration -= 0.050;
+        }
+    }
+    else{
+        if(player.acceleration > 0)
+            player.acceleration -= 0.050;
+        else if(player.acceleration < 0)
+            player.acceleration += 0.050;
+    }
+
+    if(player.degrees == 360 || player.degrees == -360)
+        player.degrees = 0;
+    //
+
     // updates and renders bullets
     for(BulletNode *cursor = bullets; cursor != NULL; cursor = cursor->nextBullet){
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);     
         for(int i = 0; i < 2; i++){
-            SDL_RenderFillRect(renderer, &cursor->bulletSprites[i]);
-            cursor->bulletSprites[i].y -= 5;
+            SDL_RenderFillRect(renderer, &cursor->bulletSprites[0]);
         }
     }
+
+    // renders player
+    SDL_RenderCopyEx(renderer, player.sprite, NULL, player.box, player.degrees, NULL, NULL);
+
 }
 
 // check for inputs (player)
@@ -68,29 +124,31 @@ void player_check_inputs(SDL_Event *e){
     
     if(e->type == SDL_KEYDOWN || e->type == SDL_KEYUP){
         
-        if(keyboard_state[SDL_SCANCODE_SPACE] && canShoot())
+        if(player.keyboard_state[SDL_SCANCODE_SPACE] && canShoot())
             player_shoot(); 
         
-        if(keyboard_state[SDL_SCANCODE_UP] && !keyboard_state[SDL_SCANCODE_DOWN]){
-            up = true;
-        } else { up = false; }
+        if(player.keyboard_state[SDL_SCANCODE_UP] && !player.keyboard_state[SDL_SCANCODE_DOWN]){
+            player.isMovingTowards = true;
+        } else { player.isMovingTowards = false; }
         
-        if(keyboard_state[SDL_SCANCODE_DOWN] && !keyboard_state[SDL_SCANCODE_UP]){
-            down = true;
-        } else { down = false; }
+        if(player.keyboard_state[SDL_SCANCODE_DOWN] && !player.keyboard_state[SDL_SCANCODE_UP]){
+            player.isMovingBackwards = true;
+        } else { player.isMovingBackwards = false; }
         
-        if(keyboard_state[SDL_SCANCODE_LEFT] && !keyboard_state[SDL_SCANCODE_RIGHT]){
-            left = true;
-        } else { left = false; }
+        if(player.keyboard_state[SDL_SCANCODE_LEFT] && !player.keyboard_state[SDL_SCANCODE_RIGHT]){
+            player.isTurningLeft = true;
+        } else { player.isTurningLeft = false; }
         
-        if(keyboard_state[SDL_SCANCODE_RIGHT] && !keyboard_state[SDL_SCANCODE_LEFT]){
-            right = true;
-        } else { right = false; }
+        if(player.keyboard_state[SDL_SCANCODE_RIGHT] && !player.keyboard_state[SDL_SCANCODE_LEFT]){
+            player.isTurningRight = true;
+        } else { player.isTurningRight = false; }
     }
 }
 
 void player_shoot(){
+
     startShootTime = SDL_GetTicks();
+
     // creates a node that will contain the new bullet
     BulletNode *new_bullet = malloc(sizeof(BulletNode));
     if(!new_bullet) { printf("fatal error: [pbullets] memory not allocated\n");}
@@ -100,30 +158,31 @@ void player_shoot(){
         new_bullet->bulletSprites[i].w = BULLET_WIDTH;
         new_bullet->bulletSprites[i].h = BULLET_HEIGHT;
     }
-    
-    new_bullet->bulletSprites[0].x = player.x - 2;
-    new_bullet->bulletSprites[0].y = player.y;
-    new_bullet->bulletSprites[1].x = player.x + 25;
-    new_bullet->bulletSprites[1].y = player.y;    
-    
+
     // once the player shoots again, we will replace the nextBullet with a new one
     new_bullet->nextBullet = NULL;
+
     
     if(!bullets) { bullets = new_bullet; }
     else
     {
         new_bullet->nextBullet = bullets;
         bullets = new_bullet;
-    } 
+    }
 }
 
 void free_player(){
-    free(playerBox);
+    free(player.box);
 }
+
 
 bool canShoot(){
     if(SDL_GetTicks() - startShootTime > shootingDelay)
         return true;
     
     return false;
+}
+
+double deg2rad(double degrees){
+    return (degrees * PI) / 180;
 }
