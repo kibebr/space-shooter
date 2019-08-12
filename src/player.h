@@ -4,19 +4,20 @@
 #include "main.h"
 #include <stdbool.h>
 
-#define PLAYER_WIDTH 30
-#define PLAYER_HEIGHT 30
+#define PLAYER_WIDTH 40
+#define PLAYER_HEIGHT 40
 #define PLAYER_SPEED 3
+#define PLAYER_TURNING_SPEED 3
+#define PLAYER_SPEED_LIMIT 5
 
 #define BULLET_WIDTH 5
 #define BULLET_HEIGHT 5
+#define BULLET_VELOCITY 8
+#define SHOOTING_DELAY 300 // milliseconds
 
-typedef struct{
-    bool isDead;
-    double x, y;
-} Player;
+#define PI 3.141592653589793238462643383279502884
 
-void init_player(GameProperties *gameProperties);
+void init_player();
 
 void render_player(SDL_Renderer *renderer);
 

@@ -1,4 +1,5 @@
 #include "player.h"
+
 #include <SDL2/SDL.h>
 #include <math.h>
 
@@ -14,7 +15,7 @@ typedef struct{
     //
 
     SDL_Texture* sprite;
-    SDL_Rect* box;
+    SDL_Rect box;
 
     const Uint8 *keyboard_state;
     bool isDead;
@@ -23,14 +24,15 @@ typedef struct{
 
 // bullet related
 typedef struct{
-    float floatX, floatY;
+    float x, y;
     SDL_Rect bulletSprites[2];
+    double currentPlayerDegrees;
+    double currentPlayerAcceleration;
+    int startedShooting;
     struct BulletNode *nextBullet; // will be used to create a linked list of bullets
 } BulletNode;
-
 BulletNode *bullets;
-int shootingDelay;
-int startShootTime;
+int lastTimeShot;
 void player_shoot(void);
 bool canShoot(void);
 //
@@ -40,37 +42,34 @@ double deg2rad(double degrees);
 
 static Player player;
 
-
-void init_player(GameProperties *gameProperties){
-
-    player.sprite = LoadTexture("/home/kibe/Documents/space-shooter/assets/ship.png\0");
+// initializes player
+void init_player(){
+    
+    // loads player's sprite
+    player.sprite = LoadTexture("/home/kibe/Documents/space-shooter/assets/ship3.png\0");
     
     // sets player's initial position to the center of the screen
     player.x = (SCREEN_WIDTH - PLAYER_WIDTH) / 2;
     player.y = (SCREEN_HEIGHT - PLAYER_HEIGHT) / 2;
 
-    // allocates enough memory for a SDL_Rect of the player
-    player.box = malloc(sizeof(SDL_Rect));
-    player.box->w = PLAYER_WIDTH;
-    player.box->h = PLAYER_HEIGHT;
+    // sets player's width and height
+    player.box.w = PLAYER_WIDTH;
+    player.box.h = PLAYER_HEIGHT;
     
     // used to detect if a key has been pressed or not
     player.keyboard_state = SDL_GetKeyboardState(NULL);
-    
-    shootingDelay = 300;
 
-    player.acceleration = 0;
 }
 
 // updates and renders anything related to the player
 void render_player(SDL_Renderer *renderer){
 
-    // related to player's movement
+    // turns the player
     if(player.isTurningLeft) player.degrees -= PLAYER_TURNING_SPEED;
     if(player.isTurningRight) player.degrees += PLAYER_TURNING_SPEED;
-
-    player.box->x = player.x;
-    player.box->y = player.y;
+    
+    player.box.x = player.x;
+    player.box.y = player.y;
     
     player.x += sin(deg2rad(player.degrees)) * player.acceleration;
     player.y -= cos(deg2rad(player.degrees)) * player.acceleration;
@@ -87,13 +86,15 @@ void render_player(SDL_Renderer *renderer){
     }
     else if(player.isMovingBackwards && !player.isMovingTowards)
     {
-        if(player.acceleration > -PLAYER_SPEED_LIMIT)
+        if(player.acceleration > (-PLAYER_SPEED_LIMIT + 3))
         {
             if(player.acceleration > 0)
                 player.acceleration -= 0.100;
             else
                 player.acceleration -= 0.050;
         }
+        else
+            player.acceleration += 0.050;
     }
     else{
         if(player.acceleration > 0)
@@ -109,14 +110,17 @@ void render_player(SDL_Renderer *renderer){
     // updates and renders bullets
     for(BulletNode *cursor = bullets; cursor != NULL; cursor = cursor->nextBullet){
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);     
-        for(int i = 0; i < 2; i++){
+        for(int i = 0, n_of_bullets = 2; i < n_of_bullets; i++){
             SDL_RenderFillRect(renderer, &cursor->bulletSprites[0]);
+            cursor->bulletSprites[i].x += sin(deg2rad(cursor->currentPlayerDegrees)) * (BULLET_VELOCITY + cursor->currentPlayerAcceleration);
+            cursor->bulletSprites[i].y -= cos(deg2rad(cursor->currentPlayerDegrees)) * (BULLET_VELOCITY + cursor->currentPlayerAcceleration);
         }
     }
 
     // renders player
-    SDL_RenderCopyEx(renderer, player.sprite, NULL, player.box, player.degrees, NULL, NULL);
-
+    SDL_RenderCopyEx(renderer, player.sprite, NULL, &player.box, player.degrees, NULL, NULL);
+    
+    printf("acceleration: %f\n", player.acceleration);
 }
 
 // check for inputs (player)
@@ -147,21 +151,23 @@ void player_check_inputs(SDL_Event *e){
 
 void player_shoot(){
 
-    startShootTime = SDL_GetTicks();
-
     // creates a node that will contain the new bullet
     BulletNode *new_bullet = malloc(sizeof(BulletNode));
     if(!new_bullet) { printf("fatal error: [pbullets] memory not allocated\n");}
+    
+    // the new bullet properties
+    lastTimeShot = SDL_GetTicks();
+    new_bullet->currentPlayerDegrees = player.degrees;
+    new_bullet->currentPlayerAcceleration = player.acceleration;
+    new_bullet->nextBullet = NULL;
 
     // creates the sprites (basically rectangles) that will be the bullets
     for(int i = 0; i < 2; i++){
         new_bullet->bulletSprites[i].w = BULLET_WIDTH;
         new_bullet->bulletSprites[i].h = BULLET_HEIGHT;
+        new_bullet->bulletSprites[i].x = player.x + 10;
+        new_bullet->bulletSprites[i].y = player.y + 10;
     }
-
-    // once the player shoots again, we will replace the nextBullet with a new one
-    new_bullet->nextBullet = NULL;
-
     
     if(!bullets) { bullets = new_bullet; }
     else
@@ -169,15 +175,16 @@ void player_shoot(){
         new_bullet->nextBullet = bullets;
         bullets = new_bullet;
     }
+    
+    player.acceleration -= 0.90;
 }
 
 void free_player(){
-    free(player.box);
+
 }
 
-
 bool canShoot(){
-    if(SDL_GetTicks() - startShootTime > shootingDelay)
+    if(SDL_GetTicks() - lastTimeShot > SHOOTING_DELAY)
         return true;
     
     return false;
