@@ -14,5 +14,6 @@ void init_game_states();
 void updateCurrentGameState();
 
 enum GAME_STATE getCurrentGameState(void);
+void setCurrentGameState(int state);
 
 #endif

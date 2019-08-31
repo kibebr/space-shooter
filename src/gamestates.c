@@ -15,10 +15,17 @@ void updateCurrentGameState(){
 		case MAIN_MENU:
 			update_main_menu();
 			break;
+		case RUNNING:
+			setIsGamePlaying(true);
+			break;
 	}
 }
 
 enum GAME_STATE getCurrentGameState()
 {
 	return CURRENT_GAME_STATE;
+}
+
+void setCurrentGameState(int state){
+	CURRENT_GAME_STATE = (enum GAME_STATE) state;
 }
