@@ -4,8 +4,8 @@
 #include "main.h"
 #include <stdbool.h>
 
-#define PLAYER_WIDTH 40
-#define PLAYER_HEIGHT 40
+#define PLAYER_WIDTH 30
+#define PLAYER_HEIGHT 30
 #define PLAYER_SPEED 3
 #define PLAYER_TURNING_SPEED 3
 #define PLAYER_SPEED_LIMIT 5
@@ -15,14 +15,16 @@
 #define BULLET_VELOCITY 8
 #define SHOOTING_DELAY 300 // milliseconds
 
-#define PI 3.141592653589793238462643383279502884
-
 void init_player();
 
-void render_player(SDL_Renderer *renderer);
+void render_player();
 
-void player_check_inputs(SDL_Event *e);
+void player_check_inputs();
 
 void free_player();
+
+// GETTERS
+float getPlayerPos(char POS, bool withOffset);
+bool playerHasEntered(void);
 
 #endif
